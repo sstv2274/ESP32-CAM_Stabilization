@@ -10,7 +10,6 @@ const int udpPort = 8888;
 
 WiFiUDP udp;
 
-// Mapiranje pinova za AI-Thinker ESP32-CAM modul
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -51,7 +50,7 @@ void setup() {
   config.pin_sccb_scl = SIOC_GPIO_NUM;
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
-  config.xclk_freq_hz = 20000000; // Smanjio na 16MHz zbog stabilnosti
+  config.xclk_freq_hz = 20000000; 
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size = FRAMESIZE_VGA;
   config.jpeg_quality = 15;
