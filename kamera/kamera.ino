@@ -5,7 +5,7 @@
 const char* ssid = "Tehnikolor";
 const char* password = "badanjac";
 //Ip adresa racunara na kom slusamo
-const char* udpAddress = "192.168.0.10"; 
+const char* udpAddress = "192.168.0.15"; 
 const int udpPort = 8888;
 
 WiFiUDP udp;
