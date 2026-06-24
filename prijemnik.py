@@ -4,11 +4,10 @@ import cv2
 import ctypes
 from os import path
 
-# --- UCITAVANJE C++ BIBLIOTEKE ---
 lib_path = path.abspath("./libstabilizacija.so")
 lib = ctypes.CDLL(lib_path)
 
-#posto koristim c++ funckiju ovde definisme sta joj mora biti prosledjeno
+# posto koristim c++ funkciju ovde definisem sta joj mora biti prosledjeno
 lib.stabilizuj_frejm.argtypes = [
     ctypes.POINTER(ctypes.c_ubyte), # data_ptr
     ctypes.c_int,                   # width
@@ -19,7 +18,8 @@ lib.stabilizuj_frejm.argtypes = [
 lib.stabilizuj_frejm.restype = None # Funkcija vraća void
 # ---------------------------------
 
-cv2.namedWindow('ESP32-CAM', cv2.WINDOW_AUTOSIZE)
+# Promenili smo ime prozora
+cv2.namedWindow('ESP32-CAM Poredjenje', cv2.WINDOW_NORMAL)
 print("Prozor otvoren. Čekam podatke...")
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -40,16 +40,29 @@ while True:
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             if img is not None:
+                original_img = img.copy()
+                
                 h, w, c = img.shape
-                #stride koristim zato sto opencv dodaje bitove kada ih cuva u ramu tako da finalni broj bita bude deljiv sa 4 ili 8(da bi olaksao baratanje procesora)
+                # stride koristim zato sto opencv dodaje bitove kada ih cuva u ramu 
+                # tako da finalni broj bita bude deljiv sa 4 ili 8
                 stride = img.strides[0] 
                 
                 data_ptr = img.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
                 
-                #pozivam c++ funckiju
+                # pozivam c++ funkciju (Ona menja isključivo 'img' bafer)
                 lib.stabilizuj_frejm(data_ptr, w, h, c, stride)
                 
-                cv2.imshow('ESP32-CAM', img)
+                
+                cv2.putText(original_img, "Original", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(img, "Stabilizovano", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                
+
+                kombinovani_prikaz = np.hstack((original_img, img))
+                # w je širina jednog videa, a h/2 čuva savršene proporcije
+                kombinovani_prikaz = cv2.resize(kombinovani_prikaz, (w, h // 2))
+                
+                # Prikazujemo spojenu sliku
+                cv2.imshow('ESP32-CAM Poredjenje', kombinovani_prikaz)
                 cv2.waitKey(1)
                 
             data = bytearray()

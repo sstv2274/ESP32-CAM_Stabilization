@@ -8,15 +8,13 @@ struct KeyPoint {
     int x;
     int y;
     float angle;
-    int score; //Quality of point
+    int score; 
     unsigned char descriptor[32]; 
 };
 
-//Offsets for circle
 const int krug_x[16] = { 0,  1,  2,  3, 3, 3, 2, 1, 0, -1, -2, -3, -3, -3, -2, -1 };
 const int krug_y[16] = {-3, -3, -2, -1, 0, 1, 2, 3, 3,  3,  2,  1,  0, -1, -2, -3 };
 
-//Global matrix for BRIEF
 static int par_Ax[256], par_Ay[256];
 static int par_Bx[256], par_By[256];
 static bool parovi_generisani = false;
@@ -32,7 +30,6 @@ void generisi_brief_parove() {
     parovi_generisani = true;
 }
 
-//Fast-9 edge detection with(returning score)
 int jel_fast_tacka_sa_skorom(const std::vector<unsigned char>& gray, int cx, int cy, int width, int height, int threshold) {
     int p_idx = cy * width + cx;
     unsigned char p_val = gray[p_idx];
@@ -68,7 +65,6 @@ int jel_fast_tacka_sa_skorom(const std::vector<unsigned char>& gray, int cx, int
 
     if (!jeste_tacka) return 0;
 
-    //Calculating score
     int skor = 0;
     for (int i = 0; i < 16; i++) {
         skor += std::abs(v[i] - p_val);
@@ -76,7 +72,6 @@ int jel_fast_tacka_sa_skorom(const std::vector<unsigned char>& gray, int cx, int
     return skor;
 }
 
-// orientation
 float izracunaj_orijentaciju(const std::vector<unsigned char>& gray, int cx, int cy, int width, int height) {
     long long m10 = 0, m01 = 0;
     int poluprecnik = 7;
@@ -101,7 +96,6 @@ int izracunaj_hamingovu(const unsigned char* d1, const unsigned char* d2) {
     return distanca;
 }
 
-//Sorting
 bool sortiraj_po_skoru(const KeyPoint& a, const KeyPoint& b) {
     return a.score > b.score;
 }
@@ -112,6 +106,7 @@ extern "C" {
             generisi_brief_parove();
         }
 
+        // Privremeni jednokanalni bafer za sivu sliku
         std::vector<unsigned char> gray(width * height);
         
         for (int y = 0; y < height; y++) {
@@ -120,20 +115,13 @@ extern "C" {
                 unsigned char b = data[index];
                 unsigned char g = data[index + 1];
                 unsigned char r = data[index + 2];
-                
-                unsigned char y_val = (unsigned char)((114 * b + 587 * g + 299 * r) / 1000);
-                gray[y * width + x] = y_val;
-
-                //data[index]     = y_val;
-                //data[index + 1] = y_val;
-                //data[index + 2] = y_val;
+                gray[y * width + x] = (unsigned char)((114 * b + 587 * g + 299 * r) / 1000);
             }
         }
 
         std::vector<KeyPoint> sve_tacke;
-        int prag = 8; //Small because of moting blur
+        int prag = 5; 
 
-        //taking all points and their scores
         for (int y = 15; y < height - 15; y++) {
             for (int x = 15; x < width - 15; x++) {
                 int skor = jel_fast_tacka_sa_skorom(gray, x, y, width, height, prag);
@@ -147,16 +135,13 @@ extern "C" {
             }
         }
 
-        //Filter for max number of points
         std::sort(sve_tacke.begin(), sve_tacke.end(), sortiraj_po_skoru);
 
-        //max 150 points
         int max_tacaka = 150;
         if (sve_tacke.size() > max_tacaka) {
             sve_tacke.resize(max_tacaka);
         }
 
-        //calculating Brief descriptors
         std::vector<KeyPoint> kljucne_tacke;
         for (auto& kp : sve_tacke) {
             kp.angle = izracunaj_orijentaciju(gray, kp.x, kp.y, width, height);
@@ -182,38 +167,102 @@ extern "C" {
             kljucne_tacke.push_back(kp);
         }
 
-        
         static std::vector<KeyPoint> prethodne_tacke;
         
+        // Promenljive koje akumuliraju pomeraj kroz frejmove (za glatko praćenje)
+        static float kumu_dx = 0.0f;
+        static float kumu_dy = 0.0f;
+
+        int prosecan_potres_x = 0;
+        int prosecan_potres_y = 0;
+
         if (!prethodne_tacke.empty() && !kljucne_tacke.empty()) {
+            long long suma_dx = 0;
+            long long suma_dy = 0;
+            int broj_parova = 0;
+
             for (const auto& curr : kljucne_tacke) {
                 int najbolja_distanca = 256;
+                KeyPoint najbolji_par;
 
                 for (const auto& prev : prethodne_tacke) {
                     int dist = izracunaj_hamingovu(curr.descriptor, prev.descriptor);
                     if (dist < najbolja_distanca) {
                         najbolja_distanca = dist;
+                        najbolji_par = prev;
                     }
                 }
 
+                
                 if (najbolja_distanca < 45) {
-                    //coloring picture
-                    for (int dy = -1; dy <= 1; dy++) {
-                        for (int dx = -1; dx <= 1; dx++) {
-                            int px = curr.x + dx;
-                            int py = curr.y + dy;
-                            if (px >= 0 && px < width && py >= 0 && py < height) {
-                                int bgr_idx = (py * stride) + (px * channels);
-                                data[bgr_idx]     = 255; 
-                                data[bgr_idx + 1] = 0;   
-                                data[bgr_idx + 2] = 0;   
-                            }
-                        }
+                    int dx = curr.x - najbolji_par.x;
+                    int dy = curr.y - najbolji_par.y;
+
+                    
+                    if (std::abs(dx) < 30 && std::abs(dy) < 30) {
+                        suma_dx += dx;
+                        suma_dy += dy;
+                        broj_parova++;
                     }
+                }
+            }
+
+            
+            if (broj_parova > 8) {
+                
+                kumu_dx += (float)suma_dx / broj_parova;
+                kumu_dy += (float)suma_dy / broj_parova;
+            }
+        }
+
+        
+        int zoom_procenat = 115; 
+        int centar_x = width / 2;
+        int centar_y = height / 2;
+
+        
+        
+        kumu_dx *= 0.75f;
+        kumu_dy *= 0.75f;
+
+        int max_x = centar_x - (centar_x * 100) / zoom_procenat;
+        int max_y = centar_y - (centar_y * 100) / zoom_procenat;
+
+        if (kumu_dx > max_x) kumu_dx = max_x;
+        if (kumu_dx < -max_x) kumu_dx = -max_x;
+        if (kumu_dy > max_y) kumu_dy = max_y;
+        if (kumu_dy < -max_y) kumu_dy = -max_y;
+        prosecan_potres_x = std::round(kumu_dx);
+        prosecan_potres_y = std::round(kumu_dy);
+
+        std::vector<unsigned char> temp_bgr(stride * height);
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int dest_idx = (y * stride) + (x * channels);
+
+                
+                int izvor_x = ((x - centar_x) * 100) / zoom_procenat + centar_x + prosecan_potres_x;
+                int izvor_y = ((y - centar_y) * 100) / zoom_procenat + centar_y + prosecan_potres_y;
+
+                
+                if (izvor_x >= 0 && izvor_x < width && izvor_y >= 0 && izvor_y < height) {
+                    int src_idx = (izvor_y * stride) + (izvor_x * channels);
+                    temp_bgr[dest_idx]     = data[src_idx];     // B
+                    temp_bgr[dest_idx + 1] = data[src_idx + 1]; // G
+                    temp_bgr[dest_idx + 2] = data[src_idx + 2]; // R
+                } else {
+                    temp_bgr[dest_idx]     = 0;
+                    temp_bgr[dest_idx + 1] = 0;
+                    temp_bgr[dest_idx + 2] = 0;
                 }
             }
         }
 
+        
+        std::copy(temp_bgr.begin(), temp_bgr.end(), data);
+
+        
         prethodne_tacke = kljucne_tacke;
-    }
-}
+    } 
+} // Kraj extern "C" bloka
