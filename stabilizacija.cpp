@@ -1,3 +1,4 @@
+//Sinisa Stevanovic RA58/2023
 #include <iostream>
 #include <cmath>
 #include <vector>
@@ -106,8 +107,11 @@ extern "C" {
             generisi_brief_parove();
         }
 
-        // Privremeni jednokanalni bafer za sivu sliku
-        std::vector<unsigned char> gray(width * height);
+        // ZAKRPA 1: Statička memorija koja se reciklira
+        static std::vector<unsigned char> gray;
+        if (gray.size() != width * height) {
+            gray.resize(width * height);
+        }
         
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -120,10 +124,11 @@ extern "C" {
         }
 
         std::vector<KeyPoint> sve_tacke;
-        int prag = 5; 
+        int prag = 10; 
 
-        for (int y = 15; y < height - 15; y++) {
-            for (int x = 15; x < width - 15; x++) {
+        
+        for (int y = 25; y < height - 25; y++) {
+            for (int x = 25; x < width - 25; x++) {
                 int skor = jel_fast_tacka_sa_skorom(gray, x, y, width, height, prag);
                 if (skor > 0) {
                     KeyPoint kp;
@@ -137,7 +142,7 @@ extern "C" {
 
         std::sort(sve_tacke.begin(), sve_tacke.end(), sortiraj_po_skoru);
 
-        int max_tacaka = 150;
+        int max_tacaka = 250;
         if (sve_tacke.size() > max_tacaka) {
             sve_tacke.resize(max_tacaka);
         }
@@ -169,7 +174,6 @@ extern "C" {
 
         static std::vector<KeyPoint> prethodne_tacke;
         
-        // Promenljive koje akumuliraju pomeraj kroz frejmove (za glatko praćenje)
         static float kumu_dx = 0.0f;
         static float kumu_dy = 0.0f;
 
@@ -177,9 +181,9 @@ extern "C" {
         int prosecan_potres_y = 0;
 
         if (!prethodne_tacke.empty() && !kljucne_tacke.empty()) {
-            long long suma_dx = 0;
-            long long suma_dy = 0;
-            int broj_parova = 0;
+            
+            std::vector<int> dx_lista;
+            std::vector<int> dy_lista;
 
             for (const auto& curr : kljucne_tacke) {
                 int najbolja_distanca = 256;
@@ -193,37 +197,35 @@ extern "C" {
                     }
                 }
 
-                
                 if (najbolja_distanca < 45) {
                     int dx = curr.x - najbolji_par.x;
                     int dy = curr.y - najbolji_par.y;
 
-                    
                     if (std::abs(dx) < 30 && std::abs(dy) < 30) {
-                        suma_dx += dx;
-                        suma_dy += dy;
-                        broj_parova++;
+                        dx_lista.push_back(dx);
+                        dy_lista.push_back(dy);
                     }
                 }
             }
 
-            
-            if (broj_parova > 8) {
+            if (dx_lista.size() > 8) {
+                std::sort(dx_lista.begin(), dx_lista.end());
+                std::sort(dy_lista.begin(), dy_lista.end());
                 
-                kumu_dx += (float)suma_dx / broj_parova;
-                kumu_dy += (float)suma_dy / broj_parova;
+                int medijana_dx = dx_lista[dx_lista.size() / 2];
+                int medijana_dy = dy_lista[dy_lista.size() / 2];
+
+                kumu_dx += (float)medijana_dx;
+                kumu_dy += (float)medijana_dy;
             }
         }
-
         
-        int zoom_procenat = 115; 
+        int zoom_procenat = 130; 
         int centar_x = width / 2;
         int centar_y = height / 2;
-
         
-        
-        kumu_dx *= 0.75f;
-        kumu_dy *= 0.75f;
+        kumu_dx *= 0.95f;
+        kumu_dy *= 0.95f;
 
         int max_x = centar_x - (centar_x * 100) / zoom_procenat;
         int max_y = centar_y - (centar_y * 100) / zoom_procenat;
@@ -235,16 +237,18 @@ extern "C" {
         prosecan_potres_x = std::round(kumu_dx);
         prosecan_potres_y = std::round(kumu_dy);
 
-        std::vector<unsigned char> temp_bgr(stride * height);
+        
+        static std::vector<unsigned char> temp_bgr;
+        if (temp_bgr.size() != stride * height) {
+            temp_bgr.resize(stride * height);
+        }
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int dest_idx = (y * stride) + (x * channels);
-
                 
                 int izvor_x = ((x - centar_x) * 100) / zoom_procenat + centar_x + prosecan_potres_x;
                 int izvor_y = ((y - centar_y) * 100) / zoom_procenat + centar_y + prosecan_potres_y;
-
                 
                 if (izvor_x >= 0 && izvor_x < width && izvor_y >= 0 && izvor_y < height) {
                     int src_idx = (izvor_y * stride) + (izvor_x * channels);
@@ -258,10 +262,8 @@ extern "C" {
                 }
             }
         }
-
         
         std::copy(temp_bgr.begin(), temp_bgr.end(), data);
-
         
         prethodne_tacke = kljucne_tacke;
     } 
