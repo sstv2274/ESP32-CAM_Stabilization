@@ -1,0 +1,17 @@
+							Digitalna stabilizacija video snimka
+Finalni cilj projekta je stabilizovan video uz maksimalno zadrzavanje prirodnih pokreta. Cilj je otklanjanje sitnih vibracija kamere.
+Arhitektura sistema:
+Detekecija ivica je realizovana sa FAST9(features algoritmom za detekciju ivica. Izabrao sam ovaj algoritam da bih mogao da snimke sa esp32 obradjujem u realnom vremenu. Umesto slozenih gradijentih operacija FAST-9 testira segment od 16 piksela oko kandidata, ako je dovoljno piksela kontinuarno svetlije ili tamnije od centralnog piksela tu tacku oznacavamo kao ugao.
+Dekstiprot(BRIEF): BRIEF generise binarni niz duzine 32 bajta na osnovu binarnih testova inteziteta izmedju nasumicno odabranih parova tacaka u okolini. Glavna prednost(zbog kojeg sam i izabrao BRIEF) je brzina poredjenja. Umesto da racunam euklidske udaljenosti slicnost izmedju dva deskriptora se proverava pomocu hamingove udaljenosti
+Medijana pomeraja: da bih izracunao pomeraj na pocetku sam radio to tako sto saberem sve tacke i potom izracunam prosek i tako znam koliko se slika pomerila, ali sta ako se neki objekat pomerio(ili se sama tacka pomerila za 1-2px). Onda sam shvatio da je medijana puno bolje resenje zato sto ce srednja vrednost sortiranog niza ustvari biti tacnija.
+Koristio sam kombinaciju jezika python i c++. Na pocetku sam zbog jednostavnosti izabrao python. Olaksao mi je ucitavanje videa, i zatim prikaz istog. Ali kako bih dobio na brzini obrade(real time obrada videa) odlucio sam da sam mozak bude u c++ zbog brzine. Odlucio sam da koristim cistu translaciju umesto rotacije zato sto sam prilikom rotacije dobio mikro trzaje(zbog greske koju unosi fast-9 algoritam). Zatim mi je palo na pamet da implementiram pametnu oprugu koja bi automatski menjala koeficijent stabilizacije u odnosu na brzinu promene pozicije ali moze se reci da je bilo previse "agresivono" pa je pri vecem pokretu unelo dodatan trzaj kako bi sustigao centar videa. 
+U pocetnim iteracijama  dinamicka alokacija bafera za sliku unutar svake iteracije dovodila je do fragmentacije heap memorije, sto je uzrokovalo pucanje programa prilikom obrade 1000+ frejmova.
+Problem sam resio upotrebom static alokacije za gray i temp_bgr, cime se memorijski blokovi rezervisu samo jednom tokom inicijalizacije i kasnije "recikliraju" za kasnije iteracije. Ovim se garantuje konstatno zauzece ram-a.
+Kako bi se osigurala korektnost algoritma i vizualni kvalitet izlaznog signala, uvedena su dva ogranicenja:
+Nemogucnost citanja 25 piksela od ivice slike(Uvodjenje margine zbog sprecavanja citanja crnih ivica).
+Kako bi se sprecila pojava ivica mora sam da odsecem ivice slike u optimizovanom videu kako bih dobio prostor za stabilizaciju slike.
+Zakljucak:
+Projekat je uspešno ispunio sve funkcionalne zahteve (F-01 do F-05), pokazavši da se hibridnom arhitekturom (C++ jezgro i Python interfejs) mogu postići performanse dovoljne za obradu video signala visoke rezolucije uz minimalnu latenciju.
+
+
+														Sinisa Stevanovic RA58/2023
